@@ -1,7 +1,5 @@
 const https = require('https')
-const aws = require("aws-sdk")
-
-// aws.config.update({region: 'eu-west-1'})
+const aws = require('aws-sdk')
 
 const db = new aws.DynamoDB.DocumentClient({
   region: 'eu-west-1'
@@ -13,16 +11,31 @@ exports.handler = async (event) => {
   console.debug(event.body);
 
   // Send a message to members
-  // const chatId = 178053996
   const message = JSON.parse(event.body).message
+
+  if (message.text == '/start') {
+    await db.put({ TableName: 'chats', Item: { id: message.chat.id } }).promise()
+      .catch(err => {
+        console.error('Unable to register the chat id. Error JSON:', JSON.stringify(err, null, 2))
+        throw err
+      })
+
+    await post('sendMessage', { text: 'Welcome to Gurupa!' }, message.chat.id)
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify('Hello from Lambda! 1123'),
+    };
+  }
+
   const params = {}
   let apiHandler
   if (message.text) {
     apiHandler = 'sendMessage'
-    params.text = message.text.toUpperCase()
+    params.text = message.text
   } else if (message.photo) {
     apiHandler = 'sendPhoto'
-    params.caption = message.caption.toUpperCase()
+    params.caption = message.caption
     params.photo = message.photo[0].file_id
   }
 
