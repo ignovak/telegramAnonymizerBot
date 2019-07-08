@@ -61,7 +61,8 @@ async function handleSubscribe(message) {
         throw err
       });
 
-  await post('sendMessage', {text: 'Welcome to Gurupa!'}, message.chat.id);
+  await post('sendMessage', {text: config.greetingsText}, message.chat.id);
+  await post('sendMessage', {text: config.helpText}, message.chat.id);
 
   return successResponse('Lambda subscribed a new user!');
 }
@@ -79,7 +80,7 @@ async function handleUnsubscribe(message) {
 }
 
 async function handleHelp(message) {
-  await post('sendMessage', {text: '/start: join the conversation \n /stop: leave the conversation'}, message.chat.id);
+  await post('sendMessage', {text: config.helpText}, message.chat.id);
 
   return successResponse('Lambda send the help to the user!');
 }
