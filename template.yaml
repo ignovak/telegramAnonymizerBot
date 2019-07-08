@@ -1,0 +1,15 @@
+Transform: 'AWS::Serverless-2016-10-31'
+Resources:
+
+  GurupaBot:
+    # This resource creates a Lambda function.
+    Type: 'AWS::Serverless::Function'
+    
+    Properties:
+      
+      # This function uses the Nodejs v6.10 runtime.
+      Runtime: nodejs8.10
+        
+      # This is the Lambda function's handler.
+      Handler: index.handler
+      

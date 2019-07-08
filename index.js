@@ -120,7 +120,13 @@ exports.handler = async (event) => {
   console.debug(event.body);
 
   // Get the message
-  const message = JSON.parse(event.body).message;
+  let message = "";
+  if (typeof(event.body) === "object") {
+      message = event.body.message;
+  } else {
+      message = JSON.parse(event.body).message;
+  }
+  console.debug(message);
 
   if (message.text === userCommands.JOIN) {
     return await handleSubscribe(message);
