@@ -1,55 +1,82 @@
-const https = require('https')
-const aws = require('aws-sdk')
+const https = require('https');
+const aws = require('aws-sdk');
+const config = require('./config');
 
 const db = new aws.DynamoDB.DocumentClient({
-  region: 'eu-west-1'
-})
+  region: config.awsRegion
+});
 
-const apiToken = require('./token').token
+const userCommands = {
+  JOIN: '/start',
+  LEAVE: '/stop',
+  HELP: '/help'
+};
 
 exports.handler = async (event) => {
   console.debug(event.body);
 
-  // Send a message to members
-  const message = JSON.parse(event.body).message
+  // Get the message
+  const message = JSON.parse(event.body).message;
 
-  if (message.text == '/start') {
-    await db.put({ TableName: 'chats', Item: { id: message.chat.id } }).promise()
+  if (message.text === userCommands.JOIN) {
+    await db.put({ TableName: config.tableName, Item: { id: message.chat.id } }).promise()
       .catch(err => {
-        console.error('Unable to register the chat id. Error JSON:', JSON.stringify(err, null, 2))
+        console.error('Unable to register the chat id. Error JSON:', JSON.stringify(err, null, 2));
         throw err
-      })
+      });
 
-    await post('sendMessage', { text: 'Welcome to Gurupa!' }, message.chat.id)
+    await post('sendMessage', { text: 'Welcome to Gurupa!' }, message.chat.id);
 
     return {
       statusCode: 200,
-      body: JSON.stringify('Hello from Lambda! 1123'),
+      body: JSON.stringify('Lambda subscribed a new user!'),
+    };
+  } else if (message.text === userCommands.LEAVE) {
+
+    await db.delete({ TableName: config.tableName, Key: { id: message.chat.id } }).promise()
+        .catch(err => {
+          console.error('Unable to delete the chat id. Error JSON:', JSON.stringify(err, null, 2));
+          throw err
+        });
+
+    await post('sendMessage', { text: 'We are sorry to see you go, we will miss you in Gurupa!' }, message.chat.id);
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify('Lambda unsubscribed one user!'),
+    };
+  } else if (message.text === userCommands.HELP) {
+    await post('sendMessage', { text: '/start: join the conversation \n /stop: leave the conversation' }, message.chat.id);
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify('Lambda send the help to the user!'),
     };
   }
 
-  const params = {}
-  let apiHandler
+  //forward the message to the all subscribed users
+  const params = {};
+  let apiHandler;
   if (message.text) {
-    apiHandler = 'sendMessage'
-    params.text = message.text
+    apiHandler = 'sendMessage';
+    params.text = message.text;
   } else if (message.photo) {
-    apiHandler = 'sendPhoto'
-    params.caption = message.caption
-    params.photo = message.photo[0].file_id
+    apiHandler = 'sendPhoto';
+    params.caption = message.caption;
+    params.photo = message.photo[0].file_id;
   }
 
-  const chats = await db.scan({ TableName: 'chats' }).promise()
+  const chats = await db.scan({ TableName: config.tableName }).promise()
     .then(response => response.Items.map(_ => _.id))
     .catch(err => {
-      console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2))
+      console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
       throw err
-    })
+    });
   
   try {
     const promises = chats
-      .filter(id => id != message.chat.id)
-      .map(id => post(apiHandler, params, id))
+      .filter(id => id !== message.chat.id)
+      .map(id => post(apiHandler, params, id));
     await Promise.all(promises)
   } catch (e) {
     console.error('Failed to send a message to chatId', params.chatId, e)
@@ -57,7 +84,7 @@ exports.handler = async (event) => {
 
   const response = {
     statusCode: 200,
-    body: JSON.stringify('Hello from Lambda! 1123'),
+    body: JSON.stringify('Lambda forwarded the message to the group!'),
   };
   return response;
 };
@@ -65,33 +92,33 @@ exports.handler = async (event) => {
 function post(handler, params, chatId) {
   const options = {
     hostname: 'api.telegram.org',
-    path: `/bot${ apiToken }/${ handler }`,
+    path: `/bot${ config.token }/${ handler }`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     }
-  }
+  };
   return new Promise(function(resolve, reject) {
     const req = https.request(options, res => {
-      let response = ''
+      let response = '';
       res.on('data', data => {
         response += data
-      })
+      });
       res.on('end', d => {
-        if (res.statusCode == 200) {
-          console.debug('Message sent to chatId', chatId, response)
+        if (res.statusCode === 200) {
+          console.debug('Message sent to chatId', chatId, response);
           resolve(JSON.parse(response))
         } else {
           reject(JSON.parse(response))
         }
       })
-    })
+    });
 
     req.on('error', e => {
       console.error(e);
-    })
+    });
 
-    req.write(JSON.stringify({ ...params, chat_id: chatId }))
+    req.write(JSON.stringify({ ...params, chat_id: chatId }));
     req.end()
   });
 }
