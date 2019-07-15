@@ -63,13 +63,13 @@ async function handleDebug(message) {
 }
 
 async function handleForwardMessage(message) {
-  const params = {};
+  const params = {message_id: message.message_id};
   let apiHandler;
   if (message.text) {
-    apiHandler = 'sendMessage';
+    apiHandler = message.edit_date ? 'editMessageText' : 'sendMessage';
     params.text = message.text;
   } else if (message.photo) {
-    apiHandler = 'sendPhoto';
+    apiHandler = message.edit_date ? 'editMessageCaption' : 'sendPhoto';
     params.caption = message.caption;
     params.photo = message.photo[0].file_id;
   }
@@ -96,7 +96,8 @@ async function handleForwardMessage(message) {
 exports.handler = async (event) => {
   console.debug(event.body);
 
-  const message = typeof event.body === 'object' ? event.body.message : JSON.parse(event.body).message;
+  const body = typeof event.body === 'object' ? event.body : JSON.parse(event.body);
+  const message = body.message || body.edited_message;
   console.debug(message);
 
   if (message.text === userCommands.JOIN) {

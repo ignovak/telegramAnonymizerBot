@@ -111,15 +111,37 @@ describe('λ', function() {
       const event = {
         body: JSON.stringify({
           message: {
+            message_id: 145,
             text: 'my message',
             chat: { id: 42 }
           }
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message' }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message' }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendMessage', { text: 'my message' }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 42);
+      expect(response).toEqual({
+        statusCode: 200,
+        body: 'Lambda forwarded the message to the group!'
+      });
+    });
+
+    it('should update an edited message', async function() {
+      const event = {
+        body: JSON.stringify({
+          edited_message: {
+            message_id: 145,
+            edit_date: 101010,
+            text: 'my message',
+            chat: { id: 42 }
+          }
+        })
+      };
+      const response = await lambda.handler(event);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'
@@ -130,6 +152,7 @@ describe('λ', function() {
       const event = {
         body: JSON.stringify({
           message: {
+            message_id: 145,
             photo: [{ file_id: 'photo_id' }],
             caption: 'my message',
             chat: { id: 42 }
@@ -137,9 +160,31 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id' }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id' }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id' }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 42);
+      expect(response).toEqual({
+        statusCode: 200,
+        body: 'Lambda forwarded the message to the group!'
+      });
+    });
+
+    it('should update an edited photo caption', async function() {
+      const event = {
+        body: JSON.stringify({
+          edited_message: {
+            message_id: 145,
+            edit_date: 101010,
+            photo: [{ file_id: 'photo_id' }],
+            caption: 'my message',
+            chat: { id: 42 }
+          }
+        })
+      };
+      const response = await lambda.handler(event);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'
