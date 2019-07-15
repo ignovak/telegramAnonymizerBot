@@ -1,88 +1,65 @@
-"use strict";
-const https = require('https');
+'use strict';
 const aws = require('aws-sdk');
 const config = require('./config');
+const post = require('./util').post;
 
-const db = new aws.DynamoDB.DocumentClient({
-  region: config.awsRegion
-});
+exports.deps = {
+  config: config,
+  db: new aws.DynamoDB.DocumentClient({
+    region: config.awsRegion
+  }),
+  post: post
+};
 
 const userCommands = {
+  DEBUG: '/debug',
   JOIN: '/start',
   LEAVE: '/stop',
   HELP: '/help'
 };
 
-function post(handler, params, chatId) {
-  const options = {
-    hostname: 'api.telegram.org',
-    path: `/bot${ config.token }/${ handler }`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  };
-  return new Promise(function(resolve, reject) {
-    const req = https.request(options, res => {
-      let response = '';
-      res.on('data', data => {
-        response += data
-      });
-      res.on('end', d => {
-        if (res.statusCode === 200) {
-          console.debug('Message sent to chatId', chatId, response);
-          resolve(JSON.parse(response))
-        } else {
-          reject(JSON.parse(response))
-        }
-      })
-    });
-
-    req.on('error', e => {
-      console.error(e);
-    });
-
-    req.write(JSON.stringify({ ...params, chat_id: chatId }));
-    req.end()
-  });
-}
-
 function successResponse(message) {
   return {
     statusCode: 200,
-    body: JSON.stringify(message),
+    body: message,
   };
 }
 
 async function handleSubscribe(message) {
-  await db.put({TableName: config.tableName, Item: {id: message.chat.id}}).promise()
+  await exports.deps.db.put({TableName: exports.deps.config.tableName, Item: {id: message.chat.id}}).promise()
       .catch(err => {
         console.error('Unable to register the chat id. Error JSON:', JSON.stringify(err, null, 2));
         throw err
       });
 
-  await post('sendMessage', {text: config.greetingsText}, message.chat.id);
-  await post('sendMessage', {text: config.helpText}, message.chat.id);
+  await exports.deps.post('sendMessage', {text: exports.deps.config.greetingsText}, message.chat.id);
+  await exports.deps.post('sendMessage', {text: exports.deps.config.helpText}, message.chat.id);
 
   return successResponse('Lambda subscribed a new user!');
 }
 
 async function handleUnsubscribe(message) {
-  await db.delete({TableName: config.tableName, Key: {id: message.chat.id}}).promise()
+  await exports.deps.db.delete({TableName: exports.deps.config.tableName, Key: {id: message.chat.id}}).promise()
       .catch(err => {
         console.error('Unable to delete the chat id. Error JSON:', JSON.stringify(err, null, 2));
         throw err
       });
 
-  await post('sendMessage', {text: 'We are sorry to see you go, we will miss you in Gurupa!'}, message.chat.id);
+  await exports.deps.post('sendMessage', {text: 'We are sorry to see you go, we will miss you in Gurupa!'}, message.chat.id);
 
   return successResponse('Lambda unsubscribed one user!');
 }
 
 async function handleHelp(message) {
-  await post('sendMessage', {text: config.helpText}, message.chat.id);
+  await exports.deps.post('sendMessage', {text: exports.deps.config.helpText}, message.chat.id);
 
-  return successResponse('Lambda send the help to the user!');
+  return successResponse('Lambda sent the help to the user!');
+}
+
+async function handleDebug(message) {
+  await exports.deps.post('sendMessage', {text: message.text}, message.chat.id);
+
+  return successResponse('Lambda sent the debug to the user!');
 }
 
 async function handleForwardMessage(message) {
@@ -97,7 +74,7 @@ async function handleForwardMessage(message) {
     params.photo = message.photo[0].file_id;
   }
 
-  const chats = await db.scan({TableName: config.tableName}).promise()
+  const chats = await exports.deps.db.scan({TableName: exports.deps.config.tableName}).promise()
       .then(response => response.Items.map(_ => _.id))
       .catch(err => {
         console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
@@ -107,7 +84,7 @@ async function handleForwardMessage(message) {
   try {
     const promises = chats
         .filter(id => id !== message.chat.id)
-        .map(id => post(apiHandler, params, id));
+        .map(id => exports.deps.post(apiHandler, params, id));
     await Promise.all(promises)
   } catch (e) {
     console.error('Failed to send a message to chatId', params.chatId, e)
@@ -119,13 +96,7 @@ async function handleForwardMessage(message) {
 exports.handler = async (event) => {
   console.debug(event.body);
 
-  // Get the message
-  let message = "";
-  if (typeof(event.body) === "object") {
-      message = event.body.message;
-  } else {
-      message = JSON.parse(event.body).message;
-  }
+  const message = typeof event.body === 'object' ? event.body.message : JSON.parse(event.body).message;
   console.debug(message);
 
   if (message.text === userCommands.JOIN) {
@@ -134,6 +105,8 @@ exports.handler = async (event) => {
     return await handleUnsubscribe(message);
   } else if (message.text === userCommands.HELP) {
     return await handleHelp(message);
+  } else if (message.text && message.text.startsWith(userCommands.DEBUG)) {
+    return await handleDebug(message);
   }
   return await handleForwardMessage(message);
 };

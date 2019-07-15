@@ -1,0 +1,15 @@
+{
+  "name": "telegram-anonymizer-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:ignovak/telegramAnonymizerBot.git",
+  "author": "Igor Novak <bezengi@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "aws-sdk": "^2.493.0",
+    "jasmine": "^3.4.0"
+  },
+  "scripts": {
+    "test": "jasmine"
+  }
+}

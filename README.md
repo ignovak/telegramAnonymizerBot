@@ -1,3 +1,5 @@
+## Running the tests
+'npm i && npm test' (or `yarn && yarn test`)
 
 ## Running locally
 You can run the lambda locally, inside your Docker container. Follow these steps:
