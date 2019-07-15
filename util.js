@@ -34,3 +34,15 @@ exports.post = function post(handler, params, chatId) {
     req.end()
   });
 };
+
+/**
+ * Get a nickname from the list
+ * The nickname should rotate daily without collisions
+ */
+exports.getNickname = function getNickname(chats, chatId) {
+  const chatIndex = chats.findIndex(id => id === chatId);
+  const nicknames = config.nicknames; // Always assuming nicknames.length >= chats.length
+  const prime = 47; // A number mutually prime to the nicknames length
+  const index = (new Date / 1000 / 3600 / 24 + chatIndex) * prime % nicknames.length | 0;
+  return nicknames[index];
+};

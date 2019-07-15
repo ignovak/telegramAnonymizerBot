@@ -2,7 +2,7 @@ const aws = require('aws-sdk');
 
 const config = require('../config');
 const lambda = require('../index');
-const post = require('../util').post;
+const util = require('../util');
 
 describe('λ', function() {
 
@@ -12,7 +12,8 @@ describe('λ', function() {
     lambda.deps = {
       config: config,
       db: new aws.DynamoDB.DocumentClient(),
-      post: post
+      post: util.post,
+      getNickname: util.getNickname
     };
 
     config.greetingsText = 'greetings text';
@@ -21,6 +22,8 @@ describe('λ', function() {
     spyOn(console, 'debug');
     spyOn(lambda.deps.db, 'put').and.returnValue({ promise: _ => Promise.resolve() });
     spyOn(lambda.deps.db, 'delete').and.returnValue({ promise: _ => Promise.resolve() });
+    spyOn(lambda.deps.db, 'scan').and.returnValue({ promise: _ => Promise.resolve({ Items: [{ id: 1}, { id: 2}, { id: 42 }] }) });
+    spyOn(lambda.deps, 'getNickname').and.callFake((chats, chatId) => chatId === 42 ? 'user1' : 'user3');
     postSpy = spyOn(lambda.deps, 'post').and.returnValue(Promise.resolve());
   });
 
@@ -93,7 +96,24 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: '/debug test' }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'user1: /debug test' }, 42);
+      expect(response).toEqual({
+        statusCode: 200,
+        body: 'Lambda sent the debug to the user!'
+      });
+    });
+
+    it('should process rotate the nicknames', async function() {
+      const event = {
+        body: JSON.stringify({
+          message: {
+            text: '/debug test',
+            chat: { id: 2 }
+          }
+        })
+      };
+      const response = await lambda.handler(event);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'user3: /debug test' }, 2);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda sent the debug to the user!'
@@ -102,10 +122,6 @@ describe('λ', function() {
   });
 
   describe('message processing', function() {
-
-    beforeAll(() => {
-      spyOn(lambda.deps.db, 'scan').and.returnValue({ promise: _ => Promise.resolve({ Items: [{ id: 1}, { id: 2}, { id: 42 }] }) });
-    })
 
     it('should forward a message to other chats', async function() {
       const event = {
@@ -118,9 +134,9 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendMessage', { text: 'my message', message_id: 145 }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'user1: my message', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendMessage', { text: 'user1: my message', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendMessage', { text: 'user1: my message', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'
@@ -139,9 +155,9 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageText', { text: 'my message', message_id: 145 }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'user1: my message', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageText', { text: 'user1: my message', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageText', { text: 'user1: my message', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'
@@ -160,9 +176,9 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendPhoto', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendPhoto', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'
@@ -182,9 +198,9 @@ describe('λ', function() {
         })
       };
       const response = await lambda.handler(event);
-      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 1);
-      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 2);
-      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageCaption', { caption: 'my message', photo: 'photo_id', message_id: 145 }, 42);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('editMessageCaption', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('editMessageCaption', { caption: 'user1: my message', photo: 'photo_id', message_id: 145 }, 42);
       expect(response).toEqual({
         statusCode: 200,
         body: 'Lambda forwarded the message to the group!'

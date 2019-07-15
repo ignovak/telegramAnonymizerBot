@@ -1,14 +1,15 @@
 'use strict';
 const aws = require('aws-sdk');
 const config = require('./config');
-const post = require('./util').post;
+const util = require('./util');
 
 exports.deps = {
   config: config,
   db: new aws.DynamoDB.DocumentClient({
     region: config.awsRegion
   }),
-  post: post
+  post: util.post,
+  getNickname: util.getNickname
 };
 
 const userCommands = {
@@ -23,6 +24,15 @@ function successResponse(message) {
     statusCode: 200,
     body: message,
   };
+}
+
+function fetchChats() {
+  return exports.deps.db.scan({TableName: exports.deps.config.tableName}).promise()
+      .then(response => response.Items.map(_ => _.id))
+      .catch(err => {
+        console.error('Unable to fetch chats. Error JSON:', JSON.stringify(err, null, 2));
+        throw err;
+      });
 }
 
 async function handleSubscribe(message) {
@@ -57,29 +67,29 @@ async function handleHelp(message) {
 }
 
 async function handleDebug(message) {
-  await exports.deps.post('sendMessage', {text: message.text}, message.chat.id);
+  const chats = await fetchChats();
+  const nickname = exports.deps.getNickname(chats, message.chat.id);
+
+  await exports.deps.post('sendMessage', {text: nickname + ': ' + message.text}, message.chat.id);
 
   return successResponse('Lambda sent the debug to the user!');
 }
 
 async function handleForwardMessage(message) {
   const params = {message_id: message.message_id};
+
+  const chats = await fetchChats();
+  const nickname = exports.deps.getNickname(chats, message.chat.id);
+
   let apiHandler;
   if (message.text) {
     apiHandler = message.edit_date ? 'editMessageText' : 'sendMessage';
-    params.text = message.text;
+    params.text = nickname + ': ' + message.text;
   } else if (message.photo) {
     apiHandler = message.edit_date ? 'editMessageCaption' : 'sendPhoto';
-    params.caption = message.caption;
+    params.caption = nickname + ': ' + message.caption;
     params.photo = message.photo[0].file_id;
   }
-
-  const chats = await exports.deps.db.scan({TableName: exports.deps.config.tableName}).promise()
-      .then(response => response.Items.map(_ => _.id))
-      .catch(err => {
-        console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
-        throw err
-      });
 
   try {
     const promises = chats
