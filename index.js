@@ -87,7 +87,9 @@ async function handleForwardMessage(message) {
     params.text = nickname + ': ' + message.text;
   } else if (message.photo) {
     apiHandler = message.edit_date ? 'editMessageCaption' : 'sendPhoto';
-    params.caption = nickname + ': ' + message.caption;
+    if (message.caption) {
+      params.caption = nickname + ': ' + message.caption;
+    }
     params.photo = message.photo[0].file_id;
   }
 

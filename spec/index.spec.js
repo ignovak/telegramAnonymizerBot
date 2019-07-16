@@ -185,6 +185,26 @@ describe('λ', function() {
       });
     });
 
+    it('should not add a caption to a photo if it is empty', async function() {
+      const event = {
+        body: JSON.stringify({
+          message: {
+            message_id: 145,
+            photo: [{ file_id: 'photo_id' }],
+            chat: { id: 42 }
+          }
+        })
+      };
+      const response = await lambda.handler(event);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { photo: 'photo_id', message_id: 145 }, 1);
+      expect(lambda.deps.post).toHaveBeenCalledWith('sendPhoto', { photo: 'photo_id', message_id: 145 }, 2);
+      expect(lambda.deps.post).not.toHaveBeenCalledWith('sendPhoto', { photo: 'photo_id', message_id: 145 }, 42);
+      expect(response).toEqual({
+        statusCode: 200,
+        body: 'Lambda forwarded the message to the group!'
+      });
+    });
+
     it('should update an edited photo caption', async function() {
       const event = {
         body: JSON.stringify({
